@@ -1,0 +1,7 @@
+
+.idea/
+Go.iml
+pkg/
+bin/
+conf.sec
+src/github.com/go-sql-driver

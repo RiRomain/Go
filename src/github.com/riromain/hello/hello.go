@@ -6,12 +6,15 @@ import ("fmt"
 )
 import (
 	_ "github.com/go-sql-driver/mysql"
+	"net/http"
+	"strconv"
+	"encoding/json"
 )
 
 type TempEntry struct {
-	channel string
-	date time.Time
-	temp float32
+	Channel string
+	Date    time.Time
+	Temp    float32
 }
 
 func addEntry(temperature float32, channel string, db *sql.DB) {
@@ -43,11 +46,11 @@ func readEntries(maxEntry int, channel string, db *sql.DB) ([]TempEntry){
 	temperature := []TempEntry{}
 	for rows.Next() {
 		var actualEntry TempEntry
-		err = rows.Scan(&actualEntry.date, &actualEntry.temp)
+		err = rows.Scan(&actualEntry.Date, &actualEntry.Temp)
 		if err != nil {
 			panic(err.Error()) // proper error handling instead of panic in your app
 		}
-		actualEntry.channel = channel
+		actualEntry.Channel = channel
 		temperature = append(temperature, actualEntry)
 	}
 	err = rows.Err()
@@ -57,9 +60,11 @@ func readEntries(maxEntry int, channel string, db *sql.DB) ([]TempEntry){
 	return temperature
 }
 
-func main() {
+var db *sql.DB
 
-	db, err := sql.Open("mysql", "user:password@tcp(xxx.xxx.xxx.xxx:XXXX)/dbName?parseTime=true")
+func main() {
+	var err error
+	db, err = sql.Open("mysql", "user:password@tcp(xxx.xxx.xxx.xxx:XXXX)/dbName?parseTime=true")
 	if err != nil {
 		panic(err.Error())
 	}
@@ -69,5 +74,28 @@ func main() {
 	tempEntry := readEntries(5, "BIG_TANK", db)
 	fmt.Println(tempEntry)
 
+	http.HandleFunc("/", handler)
+	http.HandleFunc("/getTemp", handleHTTPRead)
+	http.ListenAndServe(":8080", nil)
 }
 
+func handleHTTPRead(w http.ResponseWriter, r *http.Request) {
+	channel := r.URL.Query().Get("channel")
+	maxEntry := r.URL.Query().Get("maxEntry")
+	if len(channel) == 0 {
+		maxEntry = "10";
+	}
+	maxEntryAsInt , _ := strconv.Atoi(maxEntry)
+	tempEntry := readEntries(maxEntryAsInt, channel, db)
+	fmt.Println(tempEntry)
+	jsonOut, err := json.Marshal(tempEntry)
+	if err != nil {
+		fmt.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	w.Write(jsonOut)
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Response %s", r.URL.Path[1:])
+}

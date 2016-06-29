@@ -5,3 +5,4 @@ pkg/
 bin/
 conf.sec
 src/github.com/go-sql-driver
+src/github.com/derekparker/

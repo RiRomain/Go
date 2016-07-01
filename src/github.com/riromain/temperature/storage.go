@@ -1,11 +1,10 @@
 package main
 
-import ("fmt"
-	"time"
-	"database/sql"
-)
 import (
 	_ "github.com/go-sql-driver/mysql"
+	"fmt"
+	"time"
+	"database/sql"
 	"net/http"
 	"strconv"
 	"encoding/json"
@@ -16,6 +15,8 @@ type TempEntry struct {
 	Date    time.Time
 	Temp    float32
 }
+
+var db *sql.DB
 
 func addEntry(temperature float32, channel string, db *sql.DB) (error) {
 	stmtIns, err := db.Prepare("INSERT INTO TEMP_ENTRY VALUES(0, ?, ?, ?)")
@@ -32,7 +33,7 @@ func addEntry(temperature float32, channel string, db *sql.DB) (error) {
 	return nil
 }
 
-func readEntries(maxEntry int, channel string, db *sql.DB) ([]TempEntry, error){
+func readEntries(maxEntry int, channel string, db *sql.DB) ([]TempEntry, error) {
 	stmtOut, err := db.Prepare("SELECT CREATION_TIME, TEMPERATURE FROM TEMP_ENTRY WHERE CHANNEL = ? ORDER BY ID DESC LIMIT ?")
 	if err != nil {
 		return nil, err
@@ -61,7 +62,6 @@ func readEntries(maxEntry int, channel string, db *sql.DB) ([]TempEntry, error){
 	return temperature, nil
 }
 
-var db *sql.DB
 
 func main() {
 	var err error
@@ -71,37 +71,46 @@ func main() {
 	}
 	defer db.Close()
 
-	addEntry(23.2, "BIG_TANK", db)
 	tempEntry, _ := readEntries(5, "BIG_TANK", db)
 	fmt.Println(tempEntry)
 
 	http.HandleFunc("/", handler)
-	http.HandleFunc("/getTemp", handleHTTPRead)
-	http.HandleFunc("/addTemp", handleHTTPWrite)
+	http.HandleFunc("/v1/temp", handleRequest)
 	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic(err.Error())
 	}
 }
 
+func handleRequest(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		handleHTTPRead(w, r)
+	case http.MethodPost:
+		handleHTTPWrite(w, r)
+	default:
+		logAndHandleError(w, "read temperature usage: GET temp?channel=xxxxx&maxEntry=xx\nadd temperature entry usage: POST temp?channel=xxxxx&temp=xx.xx")
+	}
+}
+
 func handleHTTPRead(w http.ResponseWriter, r *http.Request) {
 	channel := r.URL.Query().Get("channel")
-	if(len(channel) == 0) {
-		logAndHandleError(w, "getTemp usage: getTemp?channel=xxxxx&maxEntry=xx")
+	if (len(channel) == 0) {
+		logAndHandleError(w, "usage: GET /v1/temp?channel=xxxxx&maxEntry=xx")
 		return
 	}
 	maxEntry := r.URL.Query().Get("maxEntry")
 	if len(maxEntry) == 0 {
 		maxEntry = "10";
 	}
-	maxEntryAsInt , err := strconv.Atoi(maxEntry)
+	maxEntryAsInt, err := strconv.Atoi(maxEntry)
 	if err != nil {
 		logAndHandleError(w, "Error while parsing max entry for channel %s, received max entry: %s\n Error: %s", channel, maxEntry, err.Error())
 		return
 	}
 	tempEntry, err := readEntries(maxEntryAsInt, channel, db)
 	if err != nil {
-		logAndHandleError(w, "Error while reading entry for channel %s, max entry %d\n Error: %s", tempEntry, maxEntryAsInt, err.Error())
+		logAndHandleError(w, "Error while reading entry for channel %s, max entry %d\n Error: %s", channel, maxEntryAsInt, err.Error())
 		return
 	}
 	jsonOut, err := json.Marshal(tempEntry)
@@ -119,7 +128,7 @@ func handleHTTPWrite(w http.ResponseWriter, r *http.Request) {
 	channel := r.URL.Query().Get("channel")
 	temperature := r.URL.Query().Get("temperature")
 	if len(channel) == 0 || len(temperature) == 0 {
-		logAndHandleError(w, "Invalid insertion request: channel %s temperature %s", channel, temperature)
+		logAndHandleError(w, "Invalid insertion request: channel %s temperature %s\nusage: POST temp?channel=xxxxx&temp=xx.xx", channel, temperature)
 		return
 	}
 	convertedTemp, err := strconv.ParseFloat(temperature, 32)
@@ -144,5 +153,5 @@ func logAndHandleError(w http.ResponseWriter, format string, a ...interface{}) {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Response %s", r.URL.Path[1:])
+	logAndHandleError(w, "read temperature entry usage: GET temp?channel=xxxxx&maxEntry=xx\nadd  temperature entry usage: POST temp?channel=xxxxx&temp=xx.xx")
 }

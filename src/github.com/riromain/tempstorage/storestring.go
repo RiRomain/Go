@@ -1,16 +1,17 @@
-package ipstore
+package main
 
 import (
 	"net/http"
 	"fmt"
-	"strconv"
-	"encoding/json"
 )
 
 func main() {
 	http.HandleFunc("/", handler)
 	http.HandleFunc("/v1/string", handleRequest)
-
+	err := http.ListenAndServe(":12004", nil)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 var tempString string
@@ -22,19 +23,19 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		handleHTTPWrite(w, r)
 	default:
-		logAndHandleError(w, "read temperature usage: GET temp?channel=xxxxx&maxEntry=xx\nadd temperature entry usage: POST temp?channel=xxxxx&temp=xx.xx")
+		logAndHandleError(w, "read string usage: GET string\nadd string entry usage: POST string?string=xxxxx")
 	}
 }
 
 func handleHTTPRead(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(tempString)
-	w.Write(tempString)
+	fmt.Println("Delivering stored string" + tempString)
+	fmt.Fprintf(w, "%s", tempString)
 }
 
 func handleHTTPWrite(w http.ResponseWriter, r *http.Request) {
 	stringReceived := r.URL.Query().Get("string")
 	if len(stringReceived) == 0 {
-		logAndHandleError(w, "Invalid insertion request: channel %s temperature %s\nusage: POST temp?channel=xxxxx&temp=xx.xx", channel, temperature)
+		logAndHandleError(w, "Invalid insertion request:\nusage: POST string?string=xxxxx")
 		return
 	}
 	tempString = stringReceived
@@ -45,7 +46,7 @@ func handleHTTPWrite(w http.ResponseWriter, r *http.Request) {
 
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	logAndHandleError(w, "real last string usage: GET v1/string\nstore new string usage: POST v1/string?string=xxx")
+	logAndHandleError(w, "read last string usage: GET v1/string\nstore new string usage: POST v1/string?string=xxx")
 }
 
 func logAndHandleError(w http.ResponseWriter, format string, a ...interface{}) {

@@ -76,7 +76,7 @@ func main() {
 
 	http.HandleFunc("/", handler)
 	http.HandleFunc("/v1/temp", handleRequest)
-	err = http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":12004", nil)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -126,7 +126,7 @@ func handleHTTPRead(w http.ResponseWriter, r *http.Request) {
 
 func handleHTTPWrite(w http.ResponseWriter, r *http.Request) {
 	channel := r.URL.Query().Get("channel")
-	temperature := r.URL.Query().Get("temperature")
+	temperature := r.URL.Query().Get("temp")
 	if len(channel) == 0 || len(temperature) == 0 {
 		logAndHandleError(w, "Invalid insertion request: channel %s temperature %s\nusage: POST temp?channel=xxxxx&temp=xx.xx", channel, temperature)
 		return

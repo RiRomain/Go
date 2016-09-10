@@ -121,6 +121,7 @@ func handleHTTPRead(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Requested entry for channel %s with a maximum of %d entry\n", channel, maxEntryAsInt)
 	fmt.Print("Going to return: ")
 	fmt.Println(tempEntry)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Write(jsonOut)
 }
 
@@ -143,6 +144,7 @@ func handleHTTPWrite(w http.ResponseWriter, r *http.Request) {
 	}
 	successInfo := fmt.Sprintf("Added entry for channel %s with temperature %f", channel, convertedTemp)
 	fmt.Println(successInfo)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	fmt.Fprint(w, successInfo)
 }
 

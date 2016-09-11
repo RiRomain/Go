@@ -16,6 +16,23 @@ type TempEntry struct {
 	Temp    float32
 }
 
+type GoogleChart struct {
+	Cols[] Cols `json:"cols"`
+	Rows[] Rows `json:"rows"`
+}
+
+type Cols struct {
+	Id string `json:"id"`
+	Label string `json:"label"`
+	Type string `json:"type"`
+}
+type Rows struct {
+	C[] RowEntry `json:"c"`
+}
+type RowEntry struct{
+	V string `json:"v"`
+}
+
 var db *sql.DB
 
 func addEntry(temperature float32, channel string, db *sql.DB) (error) {
@@ -31,6 +48,56 @@ func addEntry(temperature float32, channel string, db *sql.DB) (error) {
 		return err
 	}
 	return nil
+}
+
+func convertToGoogleChart(tempEntry[] TempEntry)(GoogleChart) {
+
+
+	googleChart := GoogleChart{}
+	googleChart.Cols = []Cols{}
+	googleChart.Rows = []Rows{}
+	col1 := Cols {
+		Id:"",
+		Label:"date",
+		Type:"string",
+	}
+	col2 := Cols {
+		Id:"",
+		Label:"°C",
+		Type:"number",
+	}
+	/*col3 := Cols {
+		Id:"",
+		Label:"channel",
+		Type:"string",
+	}*/
+	googleChart.Cols = append(googleChart.Cols, col1)
+	googleChart.Cols = append(googleChart.Cols, col2)
+	//googleChart.Cols = append(googleChart.Cols, col3)
+	fmt.Println(len(googleChart.Cols))
+	for _,element := range tempEntry {
+		var row Rows
+		row.C = []RowEntry{}
+		rowEntry1 := RowEntry{}
+
+		rowEntry1.V = element.Date.Format("02/01/06 15:04")
+
+		row.C = append(row.C, rowEntry1)
+		rowEntry2 := RowEntry{}
+		rowEntry2.V = strconv.FormatFloat(float64(element.Temp), 'f', 6, 32)
+		row.C = append(row.C, rowEntry2)
+		googleChart.Rows = append(googleChart.Rows, row)
+	}
+	googleChart.Rows = reverse(googleChart.Rows)
+	return googleChart
+}
+
+func reverse(numbers []Rows) []Rows {
+	for i := 0; i < len(numbers)/2; i++ {
+		j := len(numbers) - i - 1
+		numbers[i], numbers[j] = numbers[j], numbers[i]
+	}
+	return numbers
 }
 
 func readEntries(maxEntry int, channel string, db *sql.DB) ([]TempEntry, error) {
@@ -52,6 +119,12 @@ func readEntries(maxEntry int, channel string, db *sql.DB) ([]TempEntry, error) 
 		if err != nil {
 			return nil, err
 		}
+		utc, err := time.LoadLocation("Europe/Berlin")
+		if err != nil {
+			fmt.Println("err: ", err.Error())
+			return nil, err
+		}
+		actualEntry.Date = actualEntry.Date.In(utc)
 		actualEntry.Channel = channel
 		temperature = append(temperature, actualEntry)
 	}
@@ -73,6 +146,11 @@ func main() {
 
 	tempEntry, _ := readEntries(5, "BIG_TANK", db)
 	fmt.Println(tempEntry)
+	googleChart := convertToGoogleChart(tempEntry)
+	fmt.Println(googleChart)
+	jsonOut, err := json.Marshal(googleChart)
+	fmt.Println(jsonOut)
+
 
 	http.HandleFunc("/", handler)
 	http.HandleFunc("/v1/temp", handleRequest)
@@ -83,6 +161,13 @@ func main() {
 }
 
 func handleRequest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+	w.Header().Set("Access-Control-Allow-Headers",
+		"Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, x-requested-with")
+	if r.Method == "OPTIONS" {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		handleHTTPRead(w, r)
@@ -103,17 +188,25 @@ func handleHTTPRead(w http.ResponseWriter, r *http.Request) {
 	if len(maxEntry) == 0 {
 		maxEntry = "10";
 	}
+	format := r.URL.Query().Get("format")
 	maxEntryAsInt, err := strconv.Atoi(maxEntry)
 	if err != nil {
 		logAndHandleError(w, "Error while parsing max entry for channel %s, received max entry: %s\n Error: %s", channel, maxEntry, err.Error())
 		return
 	}
 	tempEntry, err := readEntries(maxEntryAsInt, channel, db)
+	gChartEntry := convertToGoogleChart(tempEntry)
 	if err != nil {
 		logAndHandleError(w, "Error while reading entry for channel %s, max entry %d\n Error: %s", channel, maxEntryAsInt, err.Error())
 		return
 	}
-	jsonOut, err := json.Marshal(tempEntry)
+	var jsonOut[] byte
+	if len(format) == 0 || "gChart" != format {
+		jsonOut, err = json.Marshal(tempEntry)
+	} else {
+		jsonOut, err = json.Marshal(gChartEntry)
+		fmt.Print("Selecting gChart format")
+	}
 	if err != nil {
 		logAndHandleError(w, "Error while marshaling entry for channel %s, max entry %d: %s\n Error: %s", tempEntry, channel, maxEntryAsInt, err.Error())
 		return
@@ -121,6 +214,7 @@ func handleHTTPRead(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Requested entry for channel %s with a maximum of %d entry\n", channel, maxEntryAsInt)
 	fmt.Print("Going to return: ")
 	fmt.Println(tempEntry)
+	fmt.Println(jsonOut)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Write(jsonOut)
 }
@@ -151,6 +245,7 @@ func handleHTTPWrite(w http.ResponseWriter, r *http.Request) {
 func logAndHandleError(w http.ResponseWriter, format string, a ...interface{}) {
 	errorInfo := fmt.Sprintf(format, a...)
 	fmt.Println(errorInfo)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	http.Error(w, errorInfo, http.StatusInternalServerError)
 }
 

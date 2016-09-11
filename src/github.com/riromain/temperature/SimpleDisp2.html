@@ -1,0 +1,46 @@
+<html>
+
+<head>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js" type="text/javascript" charset="utf-8"></script>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript">
+        google.load("visualization", "1", {
+            packages: ["line"]
+        });
+        google.setOnLoadCallback(drawChart);
+
+        function drawChart() {
+
+            requestURL = "http://localhost:12004/v1/temp?channel=TEMP0&maxEntry=288&format=gChart";
+            $.getJSON(requestURL, function(json) {
+                var data = new google.visualization.DataTable(json);
+				var chart = new google.charts.Line(document.getElementById('chart_div'));
+			    chart.draw(data, google.charts.Line.convertOptions(getOptions('Temperature 0')));
+			});
+			requestURL2 = "http://localhost:12004/v1/temp?channel=TEMP1&maxEntry=288&format=gChart";
+            $.getJSON(requestURL2, function(json) {
+                var data = new google.visualization.DataTable(json);
+             //   var chart = new google.visualization.LineChart(document.getElementById('chart_div2'));
+			    var chart = new google.charts.Line(document.getElementById('chart_div2'));
+                chart.draw(data, google.charts.Line.convertOptions(getOptions('Temperature 1')));
+            });
+			function getOptions(name) {
+				return {
+					width: 1900,
+					height: 400,
+					title: name,
+					is3D: true,
+					hAxis: {direction: 1},
+					curveType: 'function'
+				};
+			}
+        }
+    </script>
+</head>
+
+<body>
+    <div id="chart_div"></div>
+    <div id="chart_div2"></div>
+</body>
+
+</html>
